@@ -6,7 +6,9 @@ AlmaZoom extends the zoom slider in the stock Samsung Camera app up to **1000× 
 
 **[Download beta 2 for Samsung Camera 16](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-beta2/AlmaZoom-v1.1.3-beta2.apk)**
 
-Requires a rooted Samsung Galaxy with [Vector](https://github.com/JingMatrix/Vector) already set up.
+**[Download Xiaomi Camera beta](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-xiaomi-beta1/AlmaZoom-v1.1.3-xiaomi-beta1.apk)**
+
+Requires a rooted Android device with [Vector](https://github.com/JingMatrix/Vector) already set up.
 
 ## Compatibility
 
@@ -16,7 +18,9 @@ Requires a rooted Samsung Galaxy with [Vector](https://github.com/JingMatrix/Vec
 | Samsung Galaxy running One UI 8.0 (exact model unconfirmed) | 16.0.00.66 | 1.1.3 beta 2 revises preview crop on this Camera build. Preview and Gallery output still need an on-device retest. |
 | Other Galaxy models or Camera versions | Varies | Untested. Check your exact Camera version before reporting compatibility. |
 
-Xiaomi Camera (`com.android.camera` 6.3.007270.1) has no supported profile in this release. The device model for that APK is unconfirmed.
+## Xiaomi Camera beta
+
+Targets Xiaomi Camera **6.3.007270.1 (630072701)** on Android 13 or later. Phone model and runtime compatibility are unconfirmed. Enable the **Xiaomi Camera** (`com.android.camera`) scope in Vector, restart the camera, select rear **Photo** with regular JPEG and Live Photo off, then zoom to the app's maximum. Tap **AlmaZoom** to open the extended slider. The crop applies to the processed JPEG before storage. Standard-resolution single shots are the intended test case. Logs: `PREVIEW_ACTIVE`, `SHOT_QUEUED`, `JPEG_CROPPED`.
 
 ## Install
 

@@ -5,6 +5,7 @@ import android.graphics.BitmapRegionDecoder;
 import android.graphics.Rect;
 import android.media.ExifInterface;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -49,12 +50,41 @@ final class JpegCrop {
         }
     }
 
+    record Encoded(byte[] jpeg, Result dimensions) {}
+
+    @SuppressWarnings("deprecation")
+    static Encoded cropBytes(byte[] jpeg, float factor, File cache) throws IOException {
+        if (!Float.isFinite(factor) || factor <= 1f || jpeg == null || jpeg.length < 4
+                || jpeg.length > MAX_INPUT_BYTES || jpeg[0] != (byte) 0xff || jpeg[1] != (byte) 0xd8) return null;
+        File result = File.createTempFile("almazoom-", ".jpg", cache);
+        try {
+            BitmapRegionDecoder decoder = BitmapRegionDecoder.newInstance(jpeg, 0, jpeg.length, false);
+            ExifInterface original;
+            try {
+                original = new ExifInterface(new ByteArrayInputStream(jpeg));
+            } catch (IOException | RuntimeException error) {
+                if (decoder != null) decoder.recycle();
+                throw error;
+            }
+            Result dimensions = writeCrop(decoder, original, factor, result, jpeg.length);
+            return dimensions == null ? null : new Encoded(Files.readAllBytes(result.toPath()), dimensions);
+        } finally {
+            Files.deleteIfExists(result.toPath());
+        }
+    }
+
     @SuppressWarnings("deprecation")
     private static Result writeCrop(File source, float factor, File result, long bytes) throws IOException {
         try (FileInputStream input = new FileInputStream(source)) {
             if (input.read() != 0xff || input.read() != 0xd8) return null;
         }
+        ExifInterface original = new ExifInterface(source.getAbsolutePath());
         BitmapRegionDecoder decoder = BitmapRegionDecoder.newInstance(source.getAbsolutePath(), false);
+        return writeCrop(decoder, original, factor, result, bytes);
+    }
+
+    private static Result writeCrop(BitmapRegionDecoder decoder, ExifInterface original,
+                                    float factor, File result, long bytes) throws IOException {
         if (decoder == null) return null;
         Bitmap crop;
         int width, height, outW, outH;
@@ -86,7 +116,6 @@ final class JpegCrop {
             try (FileOutputStream output = new FileOutputStream(result)) {
                 if (!scaled.compress(Bitmap.CompressFormat.JPEG, 94, output)) return null;
             }
-            ExifInterface original = new ExifInterface(source.getAbsolutePath());
             ExifInterface outputExif = new ExifInterface(result.getAbsolutePath());
             for (String tag : EXIF_TAGS) {
                 String value = original.getAttribute(tag);

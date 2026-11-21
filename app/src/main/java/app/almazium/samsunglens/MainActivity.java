@@ -14,13 +14,16 @@ public final class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        findViewById(R.id.open_camera).setOnClickListener(view -> openSamsungCamera());
+        findViewById(R.id.open_camera).setOnClickListener(view -> openCamera());
     }
 
-    private void openSamsungCamera() {
+    private void openCamera() {
         Intent camera = getPackageManager().getLaunchIntentForPackage(SAMSUNG_CAMERA);
         if (camera == null) {
-            camera = new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).setPackage(SAMSUNG_CAMERA);
+            camera = getPackageManager().getLaunchIntentForPackage(XiaomiCameraModule.PACKAGE);
+        }
+        if (camera == null) {
+            camera = new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA);
         }
 
         try {

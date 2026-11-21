@@ -1,9 +1,10 @@
 <resources>
     <string name="app_name" translatable="false">AlmaZoom</string>
-    <string name="module_description">Digital zoom up to 1000× for Samsung Camera</string>
+    <string name="module_description">Digital zoom up to 1000× for Samsung Camera and Xiaomi Camera</string>
     <string name="open_camera">Open Camera</string>
-    <string name="camera_unavailable">Samsung Camera could not be opened.</string>
+    <string name="camera_unavailable">Camera could not be opened.</string>
     <string-array name="module_scope" translatable="false">
         <item>com.sec.android.app.camera</item>
+        <item>com.android.camera</item>
     </string-array>
 </resources>
