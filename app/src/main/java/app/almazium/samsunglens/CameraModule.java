@@ -209,12 +209,14 @@ public final class CameraModule implements IXposedHookLoadPackage {
                         }
                     } catch (Throwable error) {
                         ZoomWheel wheel = panel.wheel;
-                        if (wheel != null && p.thisObject == wheel.scroll && wheel.ready()
-                                && (Integer) p.args[1] > wheel.nativeEnd()) {
-                            p.args[1] = wheel.nativeEnd();
+                        if (wheel != null && p.thisObject == wheel.scroll) {
+                            int limit = wheel.nativeEnd();
+                            if (limit >= 0) {
+                                p.args[1] = Math.min((Integer) p.args[1], limit);
+                                p.args[3] = Math.min((Integer) p.args[3], limit);
+                            }
                         }
-                        panel.resetCrop();
-                        log(error);
+                        panel.recoverWheel(error);
                     }
                 }
             });
@@ -225,7 +227,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
                     try {
                         if (scroller(panel.zoomView) == p.thisObject) panel.updateWheel();
                     } catch (Throwable error) {
-                        log(error);
+                        panel.recoverWheel(error);
                     }
                 }
             });
@@ -496,6 +498,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
         final Handler handler = new Handler(Looper.getMainLooper());
         final StockZoomLabels stockLabels = new StockZoomLabels();
         boolean reportedMissingPreviewBuffer;
+        boolean wheelFaulted;
         final ToolbarIcon toolbar;
         volatile DigitalZoom digitalZoom;
         final SharedPreferences options;
@@ -523,7 +526,8 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 update();
                 lastError = null;
             } catch (Throwable error) {
-                hide();
+                recoverWheel(error);
+                toolbar.hide();
                 String description = error.toString();
                 if (!description.equals(lastError)) log(error);
                 lastError = description;
@@ -603,7 +607,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
         }
 
         private void updateWheel() {
-            if (!wheelHookReady || engine == null || zoomView == null) return;
+            if (wheelFaulted || !wheelHookReady || engine == null || zoomView == null) return;
             Object candidate = scroller(zoomView);
             if (!(candidate instanceof HorizontalScrollView scroll)) return;
             Object slider = getObjectField(scroll, symbol("g", "mZoomTickSlider"));
@@ -640,7 +644,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
         private boolean scrollZoom(Object widget, int x, int previous) throws Exception {
             if (wheel == null || widget != wheel.scroll) return false;
             if (wheel.positioning) return true;
-            if (!wheel.ready() || x < 0 || !sliderVisible(wheel.scroll)
+            if (wheelFaulted || !wheel.ready() || x < 0 || !sliderVisible(wheel.scroll)
                     || getBooleanField(widget, symbol("m", "mIsIgnoreScrollEvent"))) return false;
             int end = wheel.nativeEnd();
             if (!digitalConfigured()) {
@@ -715,8 +719,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 lastZoom = readSetting(settings, "ZOOM_VALUE");
                 updateDigital(binding);
             } catch (Throwable error) {
-                resetCrop();
-                log(error);
+                recoverWheel(error);
             }
         }
 
@@ -847,11 +850,32 @@ public final class CameraModule implements IXposedHookLoadPackage {
             removeWheel();
         }
 
+        private void recoverWheel(Throwable error) {
+            if (wheelFaulted) return;
+            wheelFaulted = true;
+            log(error);
+            try {
+                resetCrop();
+            } catch (RuntimeException | LinkageError resetError) {
+                log(resetError);
+            } finally {
+                clearPreviewCrop();
+                try {
+                    removeWheel();
+                } catch (RuntimeException | LinkageError removeError) {
+                    log(removeError);
+                }
+            }
+        }
+
         private void removeWheel() {
             if (wheel == null) return;
             ZoomWheel installed = wheel;
-            installed.remove();
-            wheel = null;
+            try {
+                installed.remove();
+            } finally {
+                wheel = null;
+            }
         }
     }
 

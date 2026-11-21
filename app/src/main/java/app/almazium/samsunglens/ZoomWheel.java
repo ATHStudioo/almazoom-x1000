@@ -114,23 +114,24 @@ final class ZoomWheel {
         }
     }
 
-    void moveHighlight(int x) { callMethod(ticks, "c", x); }
+    void moveHighlight(int x) {
+        // Camera 16 has static ticks. Its method named c is an unrelated synthetic bridge.
+        if (!camera16) callMethod(ticks, "c", x);
+    }
 
     void remove() {
         int limit = nativeEnd();
-        if (attached() && limit >= 0 && scroll.getScrollX() > limit) {
-            positioning = true;
-            try {
-                scroll.scrollTo(limit, scroll.getScrollY());
-                moveHighlight(scroll.getScrollX());
-            } finally {
-                positioning = false;
+        boolean snapBack = attached() && limit >= 0 && scroll.getScrollX() > limit;
+        positioning = true;
+        try {
+            for (View tick : extension) {
+                if (tick.getParent() == track) track.removeView(tick);
             }
+            extension.clear();
+            if (snapBack) scroll.scrollTo(limit, scroll.getScrollY());
+        } finally {
+            positioning = false;
         }
-        for (View tick : extension) {
-            if (tick.getParent() == track) track.removeView(tick);
-        }
-        extension.clear();
         invalidateHaptics();
     }
 
