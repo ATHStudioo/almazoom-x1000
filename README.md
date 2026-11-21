@@ -1,0 +1,1 @@
+# almazoom-x1000
