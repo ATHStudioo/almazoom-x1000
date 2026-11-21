@@ -1,6 +1,6 @@
 # AlmaZoom · цифровой зум до 1000×
 
-**[Скачать APK AlmaZoom 1.1.2](downloads/AlmaZoom-v1.1.2.apk?raw=1)** · [English](README.md)
+**[Скачать APK AlmaZoom 1.1.2](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.2/AlmaZoom-v1.1.2.apk)** · [English](README.md)
 
 Нужен Samsung Galaxy с root и настроенным Vector.
 

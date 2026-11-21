@@ -2,7 +2,7 @@
 
 AlmaZoom extends the zoom slider in the stock Samsung Camera app up to **1000× digital zoom**. It works as a Vector module in the rear camera's Photo mode with JPEG.
 
-**[Download AlmaZoom 1.1.2 APK](downloads/AlmaZoom-v1.1.2.apk?raw=1)** · [Русская версия](README.ru.md)
+**[Download AlmaZoom 1.1.2 APK](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.2/AlmaZoom-v1.1.2.apk)** · [Русская версия](README.ru.md)
 
 Requires a rooted Samsung Galaxy with [Vector](https://github.com/JingMatrix/Vector) already set up.
 
@@ -15,7 +15,7 @@ Requires a rooted Samsung Galaxy with [Vector](https://github.com/JingMatrix/Vec
 
 ## Install
 
-1. Install the [AlmaZoom APK](downloads/AlmaZoom-v1.1.2.apk?raw=1).
+1. Install the [AlmaZoom APK](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.2/AlmaZoom-v1.1.2.apk).
 2. Enable **AlmaZoom** in Vector and set its scope to **Samsung Camera** (`com.sec.android.app.camera`).
 3. Fully close Samsung Camera and reopen it. In **Photo**, use the rear camera and JPEG, such as the standard 12 MP setting with HEIF off.
 4. Open the zoom slider and scroll past the stock limit. The magnifier in Camera's quick controls toggles extended zoom.
