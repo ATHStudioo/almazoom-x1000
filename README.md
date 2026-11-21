@@ -2,9 +2,7 @@
 
 AlmaZoom extends the zoom slider in the stock Samsung Camera app up to **1000× digital zoom**. It works as a Vector module in the rear camera's Photo mode with JPEG.
 
-**[Download AlmaZoom 1.1.2 APK](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.2/AlmaZoom-v1.1.2.apk)** · [Русская версия](README.ru.md)
-
-**[Download beta 3 for Samsung Camera 16](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-beta3/AlmaZoom-v1.1.3-beta3.apk)**
+**[Download Samsung Camera beta 3](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-beta3/AlmaZoom-v1.1.3-beta3.apk)** · [Русская версия](README.ru.md)
 
 **[Download Xiaomi Camera beta](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-xiaomi-beta1/AlmaZoom-v1.1.3-xiaomi-beta1.apk)**
 
@@ -14,7 +12,7 @@ Requires a rooted Android device with [Vector](https://github.com/JingMatrix/Vec
 
 | Device | Samsung Camera | Status |
 | --- | --- | --- |
-| **Galaxy S25 Ultra (SM-S938U1)** | **17.0.00.43** | Camera hooks checked against this build. A previous version showed extended zoom on-device. JPEG saving in 1.1.2 still needs an on-device check. |
+| **Galaxy S25 Ultra (SM-S938U1)** | **17.0.00.43** | Camera hooks checked against this build. A previous version showed extended zoom on-device. JPEG saving in beta 3 still needs an on-device check. |
 | Samsung Galaxy running One UI 8.0 (exact model unconfirmed) | 16.0.00.66 | 1.1.3 beta 3 fixes the missing zoom tick callback on this Camera build. Preview and Gallery output still need an on-device retest. |
 | Other Galaxy models or Camera versions | Varies | Untested. Check your exact Camera version before reporting compatibility. |
 
@@ -24,7 +22,7 @@ Targets Xiaomi Camera **6.3.007270.1 (630072701)** on Android 13 or later. Phone
 
 ## Install
 
-1. Install the [AlmaZoom APK](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.2/AlmaZoom-v1.1.2.apk).
+1. Install the [AlmaZoom APK](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-beta3/AlmaZoom-v1.1.3-beta3.apk).
 2. Enable **AlmaZoom** in Vector and set its scope to **Samsung Camera** (`com.sec.android.app.camera`).
 3. Fully close Samsung Camera and reopen it. In **Photo**, use the rear camera and JPEG, such as the standard 12 MP setting with HEIF off.
 4. Open the zoom slider and scroll past the stock limit. The magnifier in Camera's quick controls toggles extended zoom.
@@ -33,7 +31,7 @@ Targets Xiaomi Camera **6.3.007270.1 (630072701)** on Android 13 or later. Phone
 
 Samsung Camera shoots and processes the original at its own maximum. AlmaZoom crops the processed JPEG around the same center as the enlarged preview before Gallery registration. At 400× over a 100× base, the crop uses the central quarter of the image in each dimension. The output JPEG's longest edge is capped at 2048 pixels.
 
-Version 1.1.2 sizes the added slider range to match the camera's stock limit. Slider math was tested at 10×, 20×, 30×, 50× and 100×. Camera support also depends on the preview and JPEG-saving hooks in the installed Camera build.
+AlmaZoom sizes the added slider range to match the camera's stock limit. Slider math was tested at 10×, 20×, 30×, 50× and 100×. Camera support also depends on the preview and JPEG-saving hooks in the installed Camera build.
 
 ## Build from source
 
