@@ -2,7 +2,7 @@
 
 **[Скачать оригинальную сборку Samsung для One UI 8.5+ (Camera 17.0.00.43)](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.2/AlmaZoom-v1.1.2.apk)** · [English](README.md)
 
-**[Скачать бету 3 для One UI 8.0 (Camera 16.0.00.66)](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-beta3/AlmaZoom-v1.1.3-beta3.apk)**
+**[Скачать бету 5 для One UI 8.0 (Camera 16.0.00.66)](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-beta5/AlmaZoom-v1.1.3-beta5.apk)**
 
 **[Скачать бету для камеры Xiaomi](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-xiaomi-beta1/AlmaZoom-v1.1.3-xiaomi-beta1.apk)**
 
@@ -17,7 +17,7 @@
 | Устройство | Версия Samsung Camera | Статус |
 | --- | --- | --- |
 | Galaxy S25 Ultra (SM-S938U1) | 17.0.00.43 | Профиль хуков сверён с APK. Зум в камере наблюдался на устройстве с предыдущей сборкой. Оригинальная сборка 1.1.2 рассчитана на этот APK. Сохранение JPEG ждёт проверки на устройстве. |
-| Samsung Galaxy с One UI 8.0, точная модель неизвестна | 16.0.00.66 | В 1.1.3 beta 3 исправлен сбой шкалы при вызове отсутствующего метода. Превью и сохранение в Галерею ждут повторной проверки на устройстве. |
+| Samsung Galaxy с One UI 8.0 | 16.0.00.66 | Тестер подтвердил работу зума в превью на beta 5. Сохранение JPEG ещё нужно проверить отдельно. |
 | Galaxy S20–S24 Ultra, Galaxy S26 Ultra | Любая другая сборка | Требуется проверка профиля камеры и съёмки на устройстве. |
 | Другие Samsung Galaxy | Любая другая сборка | Требуется проверка профиля камеры и съёмки на устройстве. |
 

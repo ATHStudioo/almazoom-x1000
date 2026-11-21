@@ -12,7 +12,6 @@ import android.os.SystemClock;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.HapticFeedbackConstants;
-import android.view.SurfaceControl;
 import android.view.SurfaceView;
 import android.view.TextureView;
 import android.view.View;
@@ -56,6 +55,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
     private static final String ENGINE = PACKAGE + ".engine.";
     private boolean camera16;
     private Object previewing16;
+    private SamsungPreviewSurface surfaceZoom16;
 
     private String symbol(String obfuscated, String named) {
         return camera16 ? named : obfuscated;
@@ -151,6 +151,11 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 zoom.getDeclaredField("mViewBinding");
                 zoom.getDeclaredMethod("showZoomSlider", int.class);
                 previewing16 = getStaticObjectField(findClass(ENGINE + "interfaces.Engine$State", loader), "PREVIEWING");
+                try {
+                    surfaceZoom16 = new SamsungPreviewSurface();
+                } catch (ReflectiveOperationException | LinkageError | RuntimeException unavailable) {
+                    XposedBridge.log("AlmaZoom PREVIEW_SURFACE_UNAVAILABLE " + unavailable);
+                }
             } else {
                 verifyProfile(loader, camera);
             }
@@ -626,7 +631,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
             if (wheel == null) wheel = new ZoomWheel(scroll, tickView, nativePositions, camera16);
             if (wheel.hardwareMaximum() <= 0 || wheel.hardwareMaximum() >= LIMIT) return;
             View preview = findPreview();
-            if (!PreviewCrop.supported(preview, camera16)) {
+            if (!supportsPreviewCrop(preview)) {
                 if (camera16 && preview != null && !reportedMissingPreviewBuffer) {
                     reportedMissingPreviewBuffer = true;
                     XposedBridge.log("AlmaZoom " + BuildConfig.VERSION_NAME + " PREVIEW_BUFFER_UNAVAILABLE");
@@ -799,13 +804,19 @@ public final class CameraModule implements IXposedHookLoadPackage {
             return view instanceof SurfaceView surface && surface.getHolder().getSurface().isValid();
         }
 
+        private boolean supportsPreviewCrop(View preview) {
+            return camera16 ? surfaceZoom16 != null && preview instanceof SurfaceView surface
+                    && surfaceZoom16.supports(surface) : PreviewCrop.supported(preview);
+        }
+
         private boolean applyCrop(View preview, float factor) throws Exception {
-            if (!PreviewCrop.supported(preview, camera16)) return false;
+            if (!supportsPreviewCrop(preview)) return false;
+            if (camera16) return surfaceZoom16.apply((SurfaceView) preview, factor);
             if (previewCrop == null || previewCrop.view != preview) {
                 if (previewCrop != null) previewCrop.restore();
-                previewCrop = new PreviewCrop(preview, camera16);
+                previewCrop = new PreviewCrop(preview);
                 XposedBridge.log("AlmaZoom " + BuildConfig.VERSION_NAME + " PREVIEW_CROP_READY "
-                        + (camera16 ? "surface-buffer" : preview.getClass().getSimpleName()));;
+                        + preview.getClass().getSimpleName());
             }
             return previewCrop.apply(factor);
         }
@@ -823,6 +834,10 @@ public final class CameraModule implements IXposedHookLoadPackage {
 
         private void clearPreviewCrop() {
             visibleCropFactor = 1f;
+            if (surfaceZoom16 != null) {
+                try { surfaceZoom16.restore(); }
+                catch (ReflectiveOperationException | RuntimeException error) { log(error); }
+            }
             if (previewCrop != null) {
                 try { previewCrop.restore(); }
                 catch (Throwable error) { log(error); }
@@ -893,21 +908,18 @@ public final class CameraModule implements IXposedHookLoadPackage {
         final float scaleX, scaleY, pivotX, pivotY;
         final Method clipping;
         final boolean originallyClipped;
-        final boolean bufferCrop;
-        SurfaceControl activeBuffer;
         float lastFactor;
         int lastWidth, lastHeight;
 
-        PreviewCrop(View view, boolean bufferCrop) throws Exception {
+        PreviewCrop(View view) throws Exception {
             this.view = view;
-            this.bufferCrop = bufferCrop;
             originalClip = view.getClipBounds();
             scaleX = view.getScaleX();
             scaleY = view.getScaleY();
             pivotX = view.getPivotX();
             pivotY = view.getPivotY();
-            if (bufferCrop || view instanceof TextureView) {
-                if (view instanceof TextureView texture) texture.getTransform(base);
+            if (view instanceof TextureView texture) {
+                texture.getTransform(base);
                 clipping = null;
                 originallyClipped = false;
             } else {
@@ -917,8 +929,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
             }
         }
 
-        static boolean supported(View view, boolean bufferCrop) {
-            if (bufferCrop) return view instanceof SurfaceView surface && buffer(surface) != null;
+        static boolean supported(View view) {
             if (view instanceof TextureView) return true;
             if (!(view instanceof SurfaceView)) return false;
             try {
@@ -931,7 +942,6 @@ public final class CameraModule implements IXposedHookLoadPackage {
         }
 
         boolean apply(float factor) {
-            if (bufferCrop) return applyBuffer((SurfaceView) view, factor);
             int w = view.getWidth();
             int h = view.getHeight();
             boolean sameCrop = lastFactor == factor && lastWidth == w && lastHeight == h;
@@ -952,45 +962,6 @@ public final class CameraModule implements IXposedHookLoadPackage {
             return true;
         }
 
-        private static SurfaceControl buffer(SurfaceView view) {
-            try {
-                Object control = getObjectField(view, "mBlastSurfaceControl");
-                return control instanceof SurfaceControl surface && surface.isValid() ? surface : null;
-            } catch (LinkageError | RuntimeException unavailable) {
-                return null;
-            }
-        }
-
-        private boolean applyBuffer(SurfaceView surface, float factor) {
-            SurfaceControl control = buffer(surface);
-            Rect frame = surface.getHolder().getSurfaceFrame();
-            int w = frame.width();
-            int h = frame.height();
-            if (control == null || w <= 0 || h <= 0) return false;
-            if (activeBuffer == control && lastFactor == factor && lastWidth == w && lastHeight == h) {
-                return true;
-            }
-            if (activeBuffer != null && activeBuffer != control && activeBuffer.isValid()) {
-                transformBuffer(activeBuffer, lastWidth, lastHeight, 1f);
-            }
-            // The containing surface keeps Samsung's original viewport and crop.
-            // Only transform its child, in buffer rather than layout coordinates.
-            transformBuffer(control, w, h, factor);
-            activeBuffer = control;
-            lastFactor = factor;
-            lastWidth = w;
-            lastHeight = h;
-            return true;
-        }
-
-        private static void transformBuffer(SurfaceControl control, int w, int h, float factor) {
-            try (SurfaceControl.Transaction transaction = new SurfaceControl.Transaction()) {
-                transaction.setScale(control, factor, factor);
-                transaction.setPosition(control, ZoomMath.centeredOffset(w, factor), ZoomMath.centeredOffset(h, factor));
-                transaction.apply();
-            }
-        }
-
         private void applySurface(float factor, int w, int h, boolean sameCrop) {
             int cropW = ZoomMath.cropSize(w, factor);
             int cropH = ZoomMath.cropSize(h, factor);
@@ -1007,13 +978,6 @@ public final class CameraModule implements IXposedHookLoadPackage {
         }
 
         void restore() throws Exception {
-            if (bufferCrop) {
-                if (activeBuffer != null && activeBuffer.isValid()) {
-                    transformBuffer(activeBuffer, lastWidth, lastHeight, 1f);
-                }
-                activeBuffer = null;
-                return;
-            }
             if (view instanceof TextureView texture) {
                 texture.getTransform(observedTransform);
                 if (observedTransform.equals(requestedTransform)) texture.setTransform(base);

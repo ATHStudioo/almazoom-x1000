@@ -19,13 +19,13 @@ final class StockZoomLabels {
 
     void show(Object zoomBinding, int nativeZoom, String ratio, boolean camera16) {
         Map<TextView, String> targets = new IdentityHashMap<>();
-        Object display = getObjectField(zoomBinding, camera16 ? "l" : "m");
-        TextView readout = text(getObjectField(display, camera16 ? "mViewBinding" : "i"), "b");
+        Object display = field(zoomBinding, camera16 ? "l" : "m");
+        TextView readout = text(field(display, camera16 ? "mViewBinding" : "i"), "b");
         if (readout != null) targets.put(readout, camera16 ? ratio : ratio + " ×");
         int maximumPreset = Math.round(nativeZoom / 1000f) * 1000;
-        collect(targets, getObjectField(zoomBinding, camera16 ? "d" : "e"), maximumPreset, ratio, camera16);
-        collect(targets, getObjectField(zoomBinding, "c"), maximumPreset, ratio, camera16);
-        collect(targets, getObjectField(zoomBinding, "j"), maximumPreset, ratio, camera16);
+        collect(targets, field(zoomBinding, camera16 ? "d" : "e"), maximumPreset, ratio, camera16);
+        collect(targets, field(zoomBinding, "c"), maximumPreset, ratio, camera16);
+        collect(targets, field(zoomBinding, "j"), maximumPreset, ratio, camera16);
 
         active.entrySet().removeIf(entry -> {
             if (targets.containsKey(entry.getKey())) return false;
@@ -48,9 +48,26 @@ final class StockZoomLabels {
         active.clear();
     }
 
+    private static Object field(Object owner, String field) {
+        if (owner == null) return null;
+        try {
+            return getObjectField(owner, field);
+        } catch (NoSuchFieldError unavailable) {
+            return null;
+        }
+    }
+
+    private static int zoomValue(View view, String field) {
+        try {
+            return getIntField(view, field);
+        } catch (NoSuchFieldError unavailable) {
+            return -1;
+        }
+    }
+
     private static TextView text(Object binding, String field) {
         if (binding == null) return null;
-        Object value = getObjectField(binding, field);
+        Object value = field(binding, field);
         return value instanceof TextView view ? view : null;
     }
 
@@ -58,13 +75,18 @@ final class StockZoomLabels {
         if (!(child instanceof View view)) return;
         switch (view.getClass().getSimpleName()) {
             case "ZoomShortcutButton" -> {
-                if (getIntField(view, camera16 ? "mValue" : "b") == maximum) add(targets, text(getObjectField(view, camera16 ? "mViewBinding" : "a"), "a"), ratio);
+                if (zoomValue(view, camera16 ? "mValue" : "b") != maximum) return;
+                if (camera16 && view instanceof TextView button) {
+                    add(targets, button, ratio);
+                } else if (!camera16) {
+                    add(targets, text(field(view, "a"), "a"), ratio);
+                }
             }
             case "ZoomLensShortcutButton" -> {
-                if (getIntField(view, camera16 ? "mZoomValue" : "e") == maximum) addLensLabels(targets, getObjectField(view, camera16 ? "mViewBinding" : "a"), ratio);
+                if (zoomValue(view, camera16 ? "mZoomValue" : "e") == maximum) addLensLabels(targets, field(view, camera16 ? "mViewBinding" : "a"), ratio);
             }
             case "ZoomLensTextButton" -> {
-                if (getIntField(view, camera16 ? "mDisplayZoomValue" : "q") == maximum) addLensLabels(targets, getObjectField(view, camera16 ? "mViewBinding" : "k"), ratio);
+                if (zoomValue(view, camera16 ? "mDisplayZoomValue" : "q") == maximum) addLensLabels(targets, field(view, camera16 ? "mViewBinding" : "k"), ratio);
             }
             default -> {
                 if (view instanceof ViewGroup group) {
