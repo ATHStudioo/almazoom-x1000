@@ -1,6 +1,10 @@
 package app.almazium.samsunglens;
 
 final class ZoomMath {
+    static float centeredOffset(int size, float factor) {
+        return size * (1f - factor) / 2f;
+    }
+
     static final int LIMIT = 1_000_000;
 
     private static final int MIN_EXTENSION_TICKS = 24;

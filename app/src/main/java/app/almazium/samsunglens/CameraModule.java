@@ -12,6 +12,7 @@ import android.os.SystemClock;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.HapticFeedbackConstants;
+import android.view.SurfaceControl;
 import android.view.SurfaceView;
 import android.view.TextureView;
 import android.view.View;
@@ -36,6 +37,7 @@ import static de.robv.android.xposed.XposedHelpers.callMethod;
 import static de.robv.android.xposed.XposedHelpers.callStaticMethod;
 import static de.robv.android.xposed.XposedHelpers.findAndHookMethod;
 import static de.robv.android.xposed.XposedHelpers.findClass;
+import static de.robv.android.xposed.XposedHelpers.findClassIfExists;
 import static de.robv.android.xposed.XposedHelpers.findMethodBestMatch;
 import static de.robv.android.xposed.XposedHelpers.getBooleanField;
 import static de.robv.android.xposed.XposedHelpers.getIntField;
@@ -49,6 +51,30 @@ import static de.robv.android.xposed.XposedHelpers.setObjectField;
 public final class CameraModule implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.sec.android.app.camera";
     private static final String ZOOM_VIEW = PACKAGE + ".layer.keyscreen.zoom.ZoomView";
+    private static final String SCROLLER_16 = PACKAGE + ".layer.keyscreen.zoom.slider.ZoomSliderView";
+    private static final String INTERFACES = PACKAGE + ".interfaces.";
+    private static final String ENGINE = PACKAGE + ".engine.";
+    private boolean camera16;
+    private Object previewing16;
+
+    private String symbol(String obfuscated, String named) {
+        return camera16 ? named : obfuscated;
+    }
+
+    private Object binding(View zoom) {
+        return getObjectField(zoom, symbol("a", "mViewBinding"));
+    }
+
+    private Object scroller(View zoom) {
+        return camera16 ? getObjectField(binding(zoom), "h") : getObjectField(zoom, "e");
+    }
+
+    private void setZoom(Object settings, int zoom) {
+        Object key = getStaticObjectField(setting, "ZOOM_VALUE");
+        if (camera16) callMethod(settings, "set", key, zoom);
+        else callMethod(settings, "V", zoom, key);
+    }
+
     private static final int UNIT = 1000;
     private static final int LIMIT = ZoomMath.LIMIT;
     private static final String OPTIONS = "almalens_zoom1000";
@@ -111,16 +137,30 @@ public final class CameraModule implements IXposedHookLoadPackage {
         if (!PACKAGE.equals(pkg.packageName) || !PACKAGE.equals(pkg.processName)) return;
         ClassLoader loader = pkg.classLoader;
         try {
-            setting = findClass("l9.f0", loader);
-            modeMapping = findClass("te.l0", loader);
-            resolutionMapping = findClass("te.c0", loader);
+            Class<?> slider16 = findClassIfExists(SCROLLER_16, loader);
+            Class<?> key16 = findClassIfExists(INTERFACES + "CameraSettings$Key", loader);
+            camera16 = slider16 != null && key16 != null;
+            setting = camera16 ? key16 : findClass("l9.f0", loader);
+            modeMapping = findClass(symbol("te.l0", PACKAGE + ".util.CameraShootingMode"), loader);
+            resolutionMapping = findClass(symbol("te.c0", INTERFACES + "Resolution"), loader);
             Class<?> camera = findClass(PACKAGE + ".Camera", loader);
-            verifyProfile(loader, camera);
+            if (camera16) {
+                camera.getDeclaredMethod("getCameraSettings");
+                camera.getDeclaredMethod("getLayerManager");
+                Class<?> zoom = findClass(ZOOM_VIEW, loader);
+                zoom.getDeclaredField("mViewBinding");
+                zoom.getDeclaredMethod("showZoomSlider", int.class);
+                previewing16 = getStaticObjectField(findClass(ENGINE + "interfaces.Engine$State", loader), "PREVIEWING");
+            } else {
+                verifyProfile(loader, camera);
+            }
+            XposedBridge.log("AlmaZoom " + BuildConfig.VERSION_NAME + " CAMERA_PROFILE_READY "
+                    + (camera16 ? "16" : "17"));
             try {
-                Class<?> haptic = findClass("l9.o", loader);
+                Class<?> haptic = findClass(symbol("l9.o", INTERFACES + "CameraContext$HapticPattern"), loader);
                 sliderTick = getStaticObjectField(haptic, "SLIDER");
                 majorTick = getStaticObjectField(haptic, "ZOOM_SLIDER_LARGE_TICK");
-                findMethodBestMatch(camera, "o0", haptic);
+                findMethodBestMatch(camera, symbol("o0", "playHaptic"), haptic);
             } catch (LinkageError | RuntimeException unavailable) {
                 sliderTick = null;
                 majorTick = null;
@@ -155,7 +195,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
 
     private void installWheelHooks(ClassLoader loader) {
         try {
-            Class<?> scroller = findClass("y9.g", loader);
+            Class<?> scroller = findClass(symbol("y9.g", SCROLLER_16), loader);
             findAndHookMethod(scroller, "onScrollChange", View.class, int.class, int.class,
                     int.class, int.class, new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
@@ -178,18 +218,18 @@ public final class CameraModule implements IXposedHookLoadPackage {
                     }
                 }
             });
-            findAndHookMethod(scroller, "f", new XC_MethodHook() {
+            findAndHookMethod(scroller, symbol("f", "initializeSliderView"), new XC_MethodHook() {
                 @Override protected void afterHookedMethod(MethodHookParam p) {
                     Panel panel = current;
                     if (panel == null || p.hasThrowable() || panel.zoomView == null) return;
                     try {
-                        if (getObjectField(panel.zoomView, "e") == p.thisObject) panel.updateWheel();
+                        if (scroller(panel.zoomView) == p.thisObject) panel.updateWheel();
                     } catch (Throwable error) {
                         log(error);
                     }
                 }
             });
-            findAndHookMethod(scroller, "c", int.class, new XC_MethodHook() {
+            findAndHookMethod(scroller, symbol("c", "getScrollValueByZoomLevel"), int.class, new XC_MethodHook() {
                 @Override protected void afterHookedMethod(MethodHookParam p) {
                     Panel panel = current;
                     if (panel == null || p.hasThrowable()) return;
@@ -201,7 +241,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
                     else panel.alignWheel = true;
                 }
             });
-            findAndHookMethod(findClass(ZOOM_VIEW, loader), "F2", int.class, new XC_MethodHook() {
+            findAndHookMethod(findClass(ZOOM_VIEW, loader), symbol("F2", "showZoomSlider"), int.class, new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
                     Panel panel = current;
                     if (panel == null || panel.zoomView != p.thisObject || panel.wheel == null
@@ -219,6 +259,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 }
             });
             wheelHookReady = true;
+            XposedBridge.log("AlmaZoom " + BuildConfig.VERSION_NAME + " ZOOM_WHEEL_HOOKS_READY");
         } catch (Throwable error) {
             log(error);
         }
@@ -226,13 +267,13 @@ public final class CameraModule implements IXposedHookLoadPackage {
 
     private void installPhotoHooks(ClassLoader loader) {
         try {
-            Class<?> captureInfo = findClass("q8.l", loader);
-            Class<?> controller = findClass("q8.m0", loader);
-            Class<?> saveTask = findClass("q8.v", loader);
-            Class<?> captureManager = findClass("q8.o", loader);
-            Class<?> input = findClass("l9.p", loader);
-            Class<?> captureType = findClass("z8.g0", loader);
-            findAndHookMethod(captureManager, "x", input, captureType, boolean.class, new XC_MethodHook() {
+            Class<?> captureInfo = findClass(symbol("q8.l", ENGINE + "interfaces.CaptureInfo"), loader);
+            Class<?> controller = findClass(symbol("q8.m0", ENGINE + "capture.SingleCaptureController"), loader);
+            Class<?> saveTask = findClass(symbol("q8.v", ENGINE + "capture.PictureProcessor$PictureSavingTask"), loader);
+            Class<?> captureManager = findClass(symbol("q8.o", ENGINE + "capture.CaptureManagerImpl"), loader);
+            Class<?> input = findClass(symbol("l9.p", INTERFACES + "CameraContext$InputType"), loader);
+            Class<?> captureType = findClass(symbol("z8.g0", ENGINE + "interfaces.CaptureManager$CaptureType"), loader);
+            findAndHookMethod(captureManager, symbol("x", "requestCapture"), input, captureType, boolean.class, new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
                     p.setObjectExtra("almaPreviousShutterCrop", shutterCrop.get());
                     shutterCrop.set("SINGLE_CAPTURE".equals(name(p.args[1])) ? currentCaptureFactor() : 1f);
@@ -246,7 +287,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
                     }
                 }
             });
-            findAndHookMethod(captureManager, "e", input, captureType, boolean.class, new XC_MethodHook() {
+            findAndHookMethod(captureManager, symbol("e", "createCaptureInfo"), input, captureType, boolean.class, new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
                     if (!"SINGLE_CAPTURE".equals(name(p.args[1]))) return;
                     Float locked = shutterCrop.get();
@@ -261,20 +302,20 @@ public final class CameraModule implements IXposedHookLoadPackage {
                     }
                 }
             });
-            findAndHookMethod(controller, "i0", captureInfo, new XC_MethodHook() {
+            findAndHookMethod(controller, symbol("i0", "requestSingleCapture"), captureInfo, new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
                     rememberShot(p.args[0], currentCaptureFactor());
                 }
             });
             installPostProcessingHooks(loader, captureManager, captureType);
-            findAndHookMethod(saveTask, "g", ContentValues.class, new XC_MethodHook() {
+            findAndHookMethod(saveTask, symbol("g", "insertToDb"), ContentValues.class, new XC_MethodHook() {
                 @Override protected void beforeHookedMethod(MethodHookParam p) {
                     if (shots.isEmpty()) return;
                     try {
                         Object image = jpegSaveImage(p.thisObject);
                         if (image == null) return;
-                        long stamp = getLongField(image, "g");
-                        File file = new File((String) callMethod(p.thisObject, "d"));
+                        long stamp = getLongField(image, symbol("g", "mDateTaken"));
+                        File file = new File((String) callMethod(p.thisObject, symbol("d", "getFilePath")));
                         JpegCrop.Result crop = cropForPublication(stamp, file, "SAVE_TASK");
                         if (crop == null) return;
                         ContentValues values = (ContentValues) p.args[0];
@@ -293,6 +334,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 }
             });
             photoHookReady = true;
+            XposedBridge.log("AlmaZoom " + BuildConfig.VERSION_NAME + " JPEG_HOOKS_READY");
         } catch (Throwable error) {
             log(error);
         }
@@ -303,8 +345,9 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 + "PostSavingModuleScanFile", loader);
         Class<?> validation = findClass("com.samsung.android.camera.core2.processor.postSaving.module."
                 + "PostSavingModuleValidationCheck", loader);
-        Class<?> savingInfo = findClass("com.samsung.android.camera.core2.container.SavingInfoContainer$SavingInfo", loader);
-        findAndHookMethod(manager, "f", captureType, long.class, new XC_MethodHook() {
+        Class<?> savingInfo = findClass("com.samsung.android.camera.core2.container.SavingInfoContainer"
+                + (camera16 ? "" : "$SavingInfo"), loader);
+        findAndHookMethod(manager, symbol("f", "getOutputFilePath"), captureType, long.class, new XC_MethodHook() {
             @Override protected void afterHookedMethod(MethodHookParam p) {
                 long stamp = (Long) p.args[1];
                 if (pendingShot(stamp) == null || p.hasThrowable() || !(p.getResult() instanceof List<?> outputs)
@@ -320,7 +363,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
             @Override protected void beforeHookedMethod(MethodHookParam p) {
                 if (postOutputs.isEmpty()) return;
                 Object info = p.args[0];
-                if (!"MAIN".equals(name(getObjectField(info, "a")))) return;
+                if (!camera16 && !"MAIN".equals(name(getObjectField(info, "a")))) return;
                 File file = (File) getObjectField(info, "c");
                 Long stamp = file == null ? null : postOutputs.get(file);
                 if (stamp != null) setAdditionalInstanceField(info, "almaFinalStamp", stamp);
@@ -330,8 +373,9 @@ public final class CameraModule implements IXposedHookLoadPackage {
         findAndHookMethod(scanner, "runModule", savingInfo, new XC_MethodHook() {
             @Override protected void beforeHookedMethod(MethodHookParam p) {
                 if (shots.isEmpty()) return;
+                if (camera16 && getObjectField(p.thisObject, "mExtraSavingInfoContainer") != null) return;
                 Object info = p.args[0];
-                if (!"MAIN".equals(name(getObjectField(info, "a")))) return;
+                if (!camera16 && !"MAIN".equals(name(getObjectField(info, "a")))) return;
                 File file = (File) getObjectField(info, "c");
                 if (file == null) return;
                 Long stamp = postOutputs.remove(file);
@@ -344,9 +388,10 @@ public final class CameraModule implements IXposedHookLoadPackage {
 
             @Override protected void afterHookedMethod(MethodHookParam p) {
                 if (p.getObjectExtra("almaPublishedStamp") instanceof Long stamp) {
-                    Object scanned = getObjectField(p.args[0], "k");
-                    trace(stamp, "SAMSUNG_SCAN_RETURNED", "uriPresent=" + (scanned instanceof Uri)
-                            + " ok=" + !p.hasThrowable());
+                    String result = camera16
+                            ? "scanComplete=" + getBooleanField(p.args[0], "k")
+                            : "uriPresent=" + (getObjectField(p.args[0], "k") instanceof Uri);
+                    trace(stamp, "SAMSUNG_SCAN_RETURNED", result + " ok=" + !p.hasThrowable());
                 }
             }
         });
@@ -386,10 +431,10 @@ public final class CameraModule implements IXposedHookLoadPackage {
         }
     }
 
-    private static Object jpegSaveImage(Object task) {
-        Object image = getObjectField(task, "b");
-        return "SINGLE_CAPTURE".equals(name(getObjectField(image, "f")))
-                && "JPEG".equals(name(getObjectField(image, "b")))
+    private Object jpegSaveImage(Object task) {
+        Object image = getObjectField(task, symbol("b", "mPictureSavingInfo"));
+        return "SINGLE_CAPTURE".equals(name(getObjectField(image, symbol("f", "mCaptureType"))))
+                && "JPEG".equals(name(getObjectField(image, symbol("b", "mImageFileFormat"))))
                 ? image : null;
     }
 
@@ -401,15 +446,15 @@ public final class CameraModule implements IXposedHookLoadPackage {
     private void rememberShot(Object info, float factor) {
         if (info == null || factor <= 1f) return;
         try {
-            if (!"SINGLE_CAPTURE".equals(name(callMethod(info, "b")))) return;
-            long stamp = ((Number) callMethod(info, "m")).longValue();
+            if (!"SINGLE_CAPTURE".equals(name(callMethod(info, symbol("b", "getCaptureType"))))) return;
+            long stamp = ((Number) callMethod(info, symbol("m", "getTakePictureTime"))).longValue();
             if (stamp <= 0) return;
             long now = SystemClock.elapsedRealtime();
             shots.entrySet().removeIf(entry -> entry.getValue().expires < now);
             postOutputs.entrySet().removeIf(entry -> !shots.containsKey(entry.getValue()));
             CropShot shot = new CropShot(factor, now + 180000);
             if (shots.putIfAbsent(stamp, shot) == null) {
-                trace(stamp, "SHUTTER", "factor=" + factor + " route=" + name(callMethod(info, "n")));
+                trace(stamp, "SHUTTER", "factor=" + factor + " route=" + name(callMethod(info, symbol("n", "getTakePictureType"))));
                 galleryWorker.schedule(() -> {
                     if (shots.get(stamp) == shot) trace(stamp, "WAITING_FOR_JPEG", "elapsedMs=8000");
                 }, 8, TimeUnit.SECONDS);
@@ -433,13 +478,15 @@ public final class CameraModule implements IXposedHookLoadPackage {
     }
 
     private int readSetting(Object settings, String key) {
-        return (Integer) callMethod(settings, "d", getStaticObjectField(setting, key));
+        return (Integer) callMethod(settings, symbol("d", "get"), getStaticObjectField(setting, key));
     }
 
     private boolean ordinaryResolution(Object cameraSettings) {
         if (cameraSettings == null) return false;
-        Size size = (Size) callStaticMethod(resolutionMapping, "v0",
-                readSetting(cameraSettings, "BACK_CAMERA_RESOLUTION"));
+        int resolution = readSetting(cameraSettings, "BACK_CAMERA_RESOLUTION");
+        Size size = camera16
+                ? (Size) callMethod(callStaticMethod(resolutionMapping, "getResolution", resolution), "getSize")
+                : (Size) callStaticMethod(resolutionMapping, "v0", resolution);
         return size.getWidth() > 0 && size.getHeight() > 0
                 && !JpegCrop.isHighResolution(size.getWidth(), size.getHeight());
     }
@@ -448,6 +495,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
         final Activity activity;
         final Handler handler = new Handler(Looper.getMainLooper());
         final StockZoomLabels stockLabels = new StockZoomLabels();
+        boolean reportedMissingPreviewBuffer;
         final ToolbarIcon toolbar;
         volatile DigitalZoom digitalZoom;
         final SharedPreferences options;
@@ -485,18 +533,18 @@ public final class CameraModule implements IXposedHookLoadPackage {
 
         private void update() throws Exception {
             if (activity.isFinishing() || activity.isDestroyed()) { hide(); return; }
-            Object provider = getObjectField(activity, "q");
-            settings = getObjectField(activity, "j");
+            Object provider = getObjectField(activity, symbol("q", "mShootingModeProvider"));
+            settings = getObjectField(activity, symbol("j", "mCameraSettings"));
             if (provider == null || settings == null) { hide(); return; }
-            if (!"SHOOTING_MODE_PHOTO".equals(name(callStaticMethod(modeMapping, "i", getIntField(provider, "d"))))
-                    || (Integer) callMethod(settings, "f") != 0
+            if (!"SHOOTING_MODE_PHOTO".equals(name(callStaticMethod(modeMapping, symbol("i", "getCommandId"), getIntField(provider, symbol("d", "mCurrentShootingModeId")))))
+                    || (Integer) callMethod(settings, symbol("f", "getCameraFacing")) != 0
                     || readSetting(settings, "QUICK_TAKE_RECORDING_STATUS") != 0
                     || focusLost()) {
                 hide();
                 return;
             }
 
-            Object layers = callMethod(activity, "F");
+            Object layers = callMethod(activity, symbol("F", "getLayerManager"));
             if (layers == null) { hide(); return; }
             Object keyScreen = callMethod(layers, "getKeyScreenLayerManager");
             if (keyScreen == null) { hide(); return; }
@@ -511,24 +559,26 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 removeWheel();
                 zoomView = view;
             }
-            Object binding = getObjectField(zoomView, "a");
+            Object binding = binding(zoomView);
             if (binding == null) { hide(); return; }
-            Object presenter = getObjectField(zoomView, "b");
+            Object presenter = getObjectField(zoomView, symbol("b", "mPresenter"));
             if (presenter == null) { hide(); return; }
-            engine = getObjectField(presenter, "b");
+            engine = getObjectField(presenter, symbol("b", "mEngine"));
             if (engine == null) { hide(); return; }
             if (!digitalConfigured()) {
                 disableDigitalZoom();
                 return;
             }
             // The capture request can be queued after preview has entered its capture state.
-            if (!"PREVIEWING".equals(name(getObjectField(engine, "B")))) return;
+            boolean previewing = camera16 ? Boolean.TRUE.equals(callMethod(engine, "isCurrentState", previewing16))
+                    : "PREVIEWING".equals(name(getObjectField(engine, "B")));
+            if (!previewing) return;
             if (!view.isShown() && digitalZoom == null) { hideZoom(); return; }
             lastZoom = readSetting(settings, "ZOOM_VALUE");
             updateWheel();
             if (!digitalFrameQueued) updateDigital(binding);
             boolean wheelVisible = wheel != null && wheel.scroll.isShown()
-                    && (Integer) callMethod(wheel.scroll, "getSliderLayoutVisibility") == View.VISIBLE;
+                    && sliderVisible(wheel.scroll);
             DigitalZoom selected = digitalZoom;
             if (selected != null && wheelVisible && (alignWheel || !wheelWasVisible) && wheel.ready()) {
                 wheel.showRatio(selected.ratio());
@@ -545,8 +595,8 @@ public final class CameraModule implements IXposedHookLoadPackage {
         private float captureFactor() {
             DigitalZoom selected = digitalZoom;
             if (selected == null || !options.getBoolean(EXTEND_ZOOM, true)) return 1f;
-            Object liveSettings = getObjectField(activity, "j");
-            return ordinaryResolution(liveSettings) && (Integer) callMethod(liveSettings, "f") == 0
+            Object liveSettings = getObjectField(activity, symbol("j", "mCameraSettings"));
+            return ordinaryResolution(liveSettings) && (Integer) callMethod(liveSettings, symbol("f", "getCameraFacing")) == 0
                     && readSetting(liveSettings, "HEIF") == 0
                     && Math.abs(readSetting(liveSettings, "ZOOM_VALUE") - selected.base()) <= 250
                     ? visibleCropFactor : 1f;
@@ -554,10 +604,10 @@ public final class CameraModule implements IXposedHookLoadPackage {
 
         private void updateWheel() {
             if (!wheelHookReady || engine == null || zoomView == null) return;
-            Object candidate = getObjectField(zoomView, "e");
+            Object candidate = scroller(zoomView);
             if (!(candidate instanceof HorizontalScrollView scroll)) return;
-            Object slider = getObjectField(scroll, "g");
-            Object positions = getObjectField(scroll, "d");
+            Object slider = getObjectField(scroll, symbol("g", "mZoomTickSlider"));
+            Object positions = getObjectField(scroll, symbol("d", "mCenterPosArray"));
             if (!(slider instanceof View tickView) || !(positions instanceof SparseIntArray nativePositions)) return;
             if (wheel != null && (wheel.scroll != scroll || wheel.ticks != tickView
                     || wheel.nativePositions != nativePositions)) {
@@ -569,24 +619,36 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 disableDigitalZoom();
                 return;
             }
-            if (wheel == null) wheel = new ZoomWheel(scroll, tickView, nativePositions);
-            if (wheel.hardwareMaximum() <= 0 || wheel.hardwareMaximum() >= LIMIT
-                    || !PreviewCrop.supported(findPreview())) return;
+            if (wheel == null) wheel = new ZoomWheel(scroll, tickView, nativePositions, camera16);
+            if (wheel.hardwareMaximum() <= 0 || wheel.hardwareMaximum() >= LIMIT) return;
+            View preview = findPreview();
+            if (!PreviewCrop.supported(preview, camera16)) {
+                if (camera16 && preview != null && !reportedMissingPreviewBuffer) {
+                    reportedMissingPreviewBuffer = true;
+                    XposedBridge.log("AlmaZoom " + BuildConfig.VERSION_NAME + " PREVIEW_BUFFER_UNAVAILABLE");
+                }
+                return;
+            }
             if (wheel.install() && digitalZoom != null) alignWheel = true;
+        }
+
+        private boolean sliderVisible(HorizontalScrollView scroll) {
+            return camera16 ? scroll.isShown()
+                    : Integer.valueOf(View.VISIBLE).equals(callMethod(scroll, "getSliderLayoutVisibility"));
         }
 
         private boolean scrollZoom(Object widget, int x, int previous) throws Exception {
             if (wheel == null || widget != wheel.scroll) return false;
             if (wheel.positioning) return true;
-            if (!wheel.ready() || x < 0 || (Integer) callMethod(widget, "getSliderLayoutVisibility") != View.VISIBLE
-                    || getBooleanField(widget, "m")) return false;
+            if (!wheel.ready() || x < 0 || !sliderVisible(wheel.scroll)
+                    || getBooleanField(widget, symbol("m", "mIsIgnoreScrollEvent"))) return false;
             int end = wheel.nativeEnd();
             if (!digitalConfigured()) {
                 disableDigitalZoom();
                 return x > end;
             }
             int maximum = wheel.hardwareMaximum();
-            if (((Integer) callMethod(engine, "B")) != maximum) {
+            if (((Integer) callMethod(engine, symbol("B", "getMaxZoomLevel"))) != maximum) {
                 disableDigitalZoom();
                 return x > end;
             }
@@ -594,7 +656,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
             DigitalZoom selected = digitalZoom;
             if (x <= end) {
                 if (selected != null) {
-                    if (!getBooleanField(widget, "n")) {
+                    if (!getBooleanField(widget, symbol("n", "mIsScrolling"))) {
                         alignWheel = true;
                         return true;
                     }
@@ -604,8 +666,8 @@ public final class CameraModule implements IXposedHookLoadPackage {
             }
             if (selected == null && x <= digitalStart) {
                 if (Math.abs(readSetting(settings, "ZOOM_VALUE") - maximum) > 250) {
-                    callMethod(settings, "V", maximum, getStaticObjectField(setting, "ZOOM_VALUE"));
-                    callMethod(zoomView, "N2", maximum);
+                    setZoom(settings, maximum);
+                    callMethod(zoomView, symbol("N2", "updateZoomValue"), maximum);
                 }
                 wheel.moveHighlight(x);
                 return true;
@@ -616,7 +678,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
             if (selected == null || selected.base() != maximum) {
                 pendingUntil = SystemClock.elapsedRealtime() + 1800;
                 if (Math.abs(readSetting(settings, "ZOOM_VALUE") - maximum) > 250) {
-                    callMethod(settings, "V", maximum, getStaticObjectField(setting, "ZOOM_VALUE"));
+                    setZoom(settings, maximum);
                 }
             }
             alignWheel = false;
@@ -635,7 +697,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 if (readSetting(settings, "TOUCH_VIBRATIONS") != 1) return;
                 Object nativeTick = tick == 2 ? majorTick : sliderTick;
                 if (nativeTick != null) {
-                    callMethod(activity, "o0", nativeTick);
+                    callMethod(activity, symbol("o0", "playHaptic"), nativeTick);
                 } else {
                     zoomView.performHapticFeedback(tick == 2
                             ? HapticFeedbackConstants.CONTEXT_CLICK : HapticFeedbackConstants.CLOCK_TICK);
@@ -649,7 +711,7 @@ public final class CameraModule implements IXposedHookLoadPackage {
             digitalFrameQueued = false;
             if (current != this || zoomView == null || digitalZoom == null) return;
             try {
-                Object binding = getObjectField(zoomView, "a");
+                Object binding = binding(zoomView);
                 lastZoom = readSetting(settings, "ZOOM_VALUE");
                 updateDigital(binding);
             } catch (Throwable error) {
@@ -675,12 +737,13 @@ public final class CameraModule implements IXposedHookLoadPackage {
                 clearPreviewCrop();
                 return;
             }
-            stockLabels.show(binding, selected.base(), format(selected.ratio()));
             View preview = findPreview();
             if (preview == null || !applyCrop(preview, factor)) {
                 clearPreviewCrop();
+                stockLabels.restore();
                 return;
             }
+            stockLabels.show(binding, selected.base(), format(selected.ratio()), camera16);
             visibleCropFactor = factor;
             pendingUntil = 0;
         }
@@ -708,8 +771,14 @@ public final class CameraModule implements IXposedHookLoadPackage {
         }
 
         private View findPreview() {
-            Object controller = getObjectField(activity, "f");
+            Object controller = getObjectField(activity, symbol("f", "mPreviewManager"));
             if (controller == null) return null;
+            if (camera16) {
+                Object holder = getObjectField(controller, "mPreviewSurfaceManager");
+                if (holder == null) return null;
+                Object candidate = getObjectField(holder, "mSurfaceView");
+                return candidate instanceof SurfaceView view && usable(view) ? view : null;
+            }
             Object holder = getObjectField(controller, "g");
             if (holder != null) {
                 for (String field : new String[]{"d", "f", "e"}) {
@@ -728,13 +797,14 @@ public final class CameraModule implements IXposedHookLoadPackage {
         }
 
         private boolean applyCrop(View preview, float factor) throws Exception {
-            if (!PreviewCrop.supported(preview)) return false;
+            if (!PreviewCrop.supported(preview, camera16)) return false;
             if (previewCrop == null || previewCrop.view != preview) {
                 if (previewCrop != null) previewCrop.restore();
-                previewCrop = new PreviewCrop(preview);
+                previewCrop = new PreviewCrop(preview, camera16);
+                XposedBridge.log("AlmaZoom " + BuildConfig.VERSION_NAME + " PREVIEW_CROP_READY "
+                        + (camera16 ? "surface-buffer" : preview.getClass().getSimpleName()));;
             }
-            previewCrop.apply(factor);
-            return true;
+            return previewCrop.apply(factor);
         }
 
         private void resetCrop() {
@@ -799,18 +869,21 @@ public final class CameraModule implements IXposedHookLoadPackage {
         final float scaleX, scaleY, pivotX, pivotY;
         final Method clipping;
         final boolean originallyClipped;
+        final boolean bufferCrop;
+        SurfaceControl activeBuffer;
         float lastFactor;
         int lastWidth, lastHeight;
 
-        PreviewCrop(View view) throws Exception {
+        PreviewCrop(View view, boolean bufferCrop) throws Exception {
             this.view = view;
+            this.bufferCrop = bufferCrop;
             originalClip = view.getClipBounds();
             scaleX = view.getScaleX();
             scaleY = view.getScaleY();
             pivotX = view.getPivotX();
             pivotY = view.getPivotY();
-            if (view instanceof TextureView texture) {
-                texture.getTransform(base);
+            if (bufferCrop || view instanceof TextureView) {
+                if (view instanceof TextureView texture) texture.getTransform(base);
                 clipping = null;
                 originallyClipped = false;
             } else {
@@ -820,7 +893,8 @@ public final class CameraModule implements IXposedHookLoadPackage {
             }
         }
 
-        static boolean supported(View view) {
+        static boolean supported(View view, boolean bufferCrop) {
+            if (bufferCrop) return view instanceof SurfaceView surface && buffer(surface) != null;
             if (view instanceof TextureView) return true;
             if (!(view instanceof SurfaceView)) return false;
             try {
@@ -832,14 +906,15 @@ public final class CameraModule implements IXposedHookLoadPackage {
             }
         }
 
-        void apply(float factor) {
+        boolean apply(float factor) {
+            if (bufferCrop) return applyBuffer((SurfaceView) view, factor);
             int w = view.getWidth();
             int h = view.getHeight();
             boolean sameCrop = lastFactor == factor && lastWidth == w && lastHeight == h;
             if (view instanceof TextureView texture) {
                 texture.getTransform(observedTransform);
                 boolean current = lastFactor > 1f && observedTransform.equals(requestedTransform);
-                if (sameCrop && current) return;
+                if (sameCrop && current) return true;
                 if (!current) base.set(observedTransform);
                 requestedTransform.set(base);
                 requestedTransform.postScale(factor, factor, w / 2f, h / 2f);
@@ -850,6 +925,46 @@ public final class CameraModule implements IXposedHookLoadPackage {
             lastFactor = factor;
             lastWidth = w;
             lastHeight = h;
+            return true;
+        }
+
+        private static SurfaceControl buffer(SurfaceView view) {
+            try {
+                Object control = getObjectField(view, "mBlastSurfaceControl");
+                return control instanceof SurfaceControl surface && surface.isValid() ? surface : null;
+            } catch (LinkageError | RuntimeException unavailable) {
+                return null;
+            }
+        }
+
+        private boolean applyBuffer(SurfaceView surface, float factor) {
+            SurfaceControl control = buffer(surface);
+            Rect frame = surface.getHolder().getSurfaceFrame();
+            int w = frame.width();
+            int h = frame.height();
+            if (control == null || w <= 0 || h <= 0) return false;
+            if (activeBuffer == control && lastFactor == factor && lastWidth == w && lastHeight == h) {
+                return true;
+            }
+            if (activeBuffer != null && activeBuffer != control && activeBuffer.isValid()) {
+                transformBuffer(activeBuffer, lastWidth, lastHeight, 1f);
+            }
+            // The containing surface keeps Samsung's original viewport and crop.
+            // Only transform its child, in buffer rather than layout coordinates.
+            transformBuffer(control, w, h, factor);
+            activeBuffer = control;
+            lastFactor = factor;
+            lastWidth = w;
+            lastHeight = h;
+            return true;
+        }
+
+        private static void transformBuffer(SurfaceControl control, int w, int h, float factor) {
+            try (SurfaceControl.Transaction transaction = new SurfaceControl.Transaction()) {
+                transaction.setScale(control, factor, factor);
+                transaction.setPosition(control, ZoomMath.centeredOffset(w, factor), ZoomMath.centeredOffset(h, factor));
+                transaction.apply();
+            }
         }
 
         private void applySurface(float factor, int w, int h, boolean sameCrop) {
@@ -868,6 +983,13 @@ public final class CameraModule implements IXposedHookLoadPackage {
         }
 
         void restore() throws Exception {
+            if (bufferCrop) {
+                if (activeBuffer != null && activeBuffer.isValid()) {
+                    transformBuffer(activeBuffer, lastWidth, lastHeight, 1f);
+                }
+                activeBuffer = null;
+                return;
+            }
             if (view instanceof TextureView texture) {
                 texture.getTransform(observedTransform);
                 if (observedTransform.equals(requestedTransform)) texture.setTransform(base);

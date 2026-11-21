@@ -17,15 +17,15 @@ import static de.robv.android.xposed.XposedHelpers.getObjectField;
 final class StockZoomLabels {
     private final Map<TextView, Label> active = new IdentityHashMap<>();
 
-    void show(Object zoomBinding, int nativeZoom, String ratio) {
+    void show(Object zoomBinding, int nativeZoom, String ratio, boolean camera16) {
         Map<TextView, String> targets = new IdentityHashMap<>();
-        Object display = getObjectField(zoomBinding, "m");
-        TextView readout = text(getObjectField(display, "i"), "b");
-        if (readout != null) targets.put(readout, ratio + " ×");
+        Object display = getObjectField(zoomBinding, camera16 ? "l" : "m");
+        TextView readout = text(getObjectField(display, camera16 ? "mViewBinding" : "i"), "b");
+        if (readout != null) targets.put(readout, camera16 ? ratio : ratio + " ×");
         int maximumPreset = Math.round(nativeZoom / 1000f) * 1000;
-        collect(targets, getObjectField(zoomBinding, "e"), maximumPreset, ratio);
-        collect(targets, getObjectField(zoomBinding, "c"), maximumPreset, ratio);
-        collect(targets, getObjectField(zoomBinding, "j"), maximumPreset, ratio);
+        collect(targets, getObjectField(zoomBinding, camera16 ? "d" : "e"), maximumPreset, ratio, camera16);
+        collect(targets, getObjectField(zoomBinding, "c"), maximumPreset, ratio, camera16);
+        collect(targets, getObjectField(zoomBinding, "j"), maximumPreset, ratio, camera16);
 
         active.entrySet().removeIf(entry -> {
             if (targets.containsKey(entry.getKey())) return false;
@@ -54,22 +54,22 @@ final class StockZoomLabels {
         return value instanceof TextView view ? view : null;
     }
 
-    private static void collect(Map<TextView, String> targets, Object child, int maximum, String ratio) {
+    private static void collect(Map<TextView, String> targets, Object child, int maximum, String ratio, boolean camera16) {
         if (!(child instanceof View view)) return;
         switch (view.getClass().getSimpleName()) {
             case "ZoomShortcutButton" -> {
-                if (getIntField(view, "b") == maximum) add(targets, text(getObjectField(view, "a"), "a"), ratio);
+                if (getIntField(view, camera16 ? "mValue" : "b") == maximum) add(targets, text(getObjectField(view, camera16 ? "mViewBinding" : "a"), "a"), ratio);
             }
             case "ZoomLensShortcutButton" -> {
-                if (getIntField(view, "e") == maximum) addLensLabels(targets, getObjectField(view, "a"), ratio);
+                if (getIntField(view, camera16 ? "mZoomValue" : "e") == maximum) addLensLabels(targets, getObjectField(view, camera16 ? "mViewBinding" : "a"), ratio);
             }
             case "ZoomLensTextButton" -> {
-                if (getIntField(view, "q") == maximum) addLensLabels(targets, getObjectField(view, "k"), ratio);
+                if (getIntField(view, camera16 ? "mDisplayZoomValue" : "q") == maximum) addLensLabels(targets, getObjectField(view, camera16 ? "mViewBinding" : "k"), ratio);
             }
             default -> {
                 if (view instanceof ViewGroup group) {
                     for (int i = 0; i < group.getChildCount(); i++) {
-                        collect(targets, group.getChildAt(i), maximum, ratio);
+                        collect(targets, group.getChildAt(i), maximum, ratio, camera16);
                     }
                 }
             }

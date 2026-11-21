@@ -4,7 +4,7 @@ AlmaZoom extends the zoom slider in the stock Samsung Camera app up to **1000× 
 
 **[Download AlmaZoom 1.1.2 APK](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.2/AlmaZoom-v1.1.2.apk)** · [Русская версия](README.ru.md)
 
-**[Download beta 1 for Samsung Camera 16](https://github.com/zz5644934-design/almazoom-x1000/raw/main/downloads/AlmaZoom-v1.1.3-beta1.apk)**
+**[Download beta 2 for Samsung Camera 16](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-beta2/AlmaZoom-v1.1.3-beta2.apk)**
 
 Requires a rooted Samsung Galaxy with [Vector](https://github.com/JingMatrix/Vector) already set up.
 
@@ -13,7 +13,7 @@ Requires a rooted Samsung Galaxy with [Vector](https://github.com/JingMatrix/Vec
 | Device | Samsung Camera | Status |
 | --- | --- | --- |
 | **Galaxy S25 Ultra (SM-S938U1)** | **17.0.00.43** | Camera hooks checked against this build. A previous version showed extended zoom on-device. JPEG saving in 1.1.2 still needs an on-device check. |
-| Samsung Galaxy running One UI 8.0 (exact model unconfirmed) | 16.0.00.66 | 1.1.3 beta 1 includes a profile checked against the APK. Preview and Gallery output await device testing. |
+| Samsung Galaxy running One UI 8.0 (exact model unconfirmed) | 16.0.00.66 | 1.1.3 beta 2 revises preview crop on this Camera build. Preview and Gallery output still need an on-device retest. |
 | Other Galaxy models or Camera versions | Varies | Untested. Check your exact Camera version before reporting compatibility. |
 
 Xiaomi Camera (`com.android.camera` 6.3.007270.1) has no supported profile in this release. The device model for that APK is unconfirmed.

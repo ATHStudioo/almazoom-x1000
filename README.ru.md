@@ -2,7 +2,7 @@
 
 **[Скачать APK AlmaZoom 1.1.2](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.2/AlmaZoom-v1.1.2.apk)** · [English](README.md)
 
-**[Скачать бету для Samsung Camera 16](https://github.com/zz5644934-design/almazoom-x1000/raw/main/downloads/AlmaZoom-v1.1.3-beta1.apk)**
+**[Скачать бету 2 для Samsung Camera 16](https://github.com/zz5644934-design/almazoom-x1000/releases/download/v1.1.3-beta2/AlmaZoom-v1.1.3-beta2.apk)**
 
 Нужен Samsung Galaxy с root и настроенным Vector.
 
@@ -15,7 +15,7 @@
 | Устройство | Версия Samsung Camera | Статус |
 | --- | --- | --- |
 | Galaxy S25 Ultra (SM-S938U1) | 17.0.00.43 | Профиль хуков сверён с APK. Зум в камере наблюдался на устройстве с предыдущей сборкой. Сохранение JPEG и версия 1.1.2 ждут проверки на устройстве. |
-| Samsung Galaxy с One UI 8.0, точная модель неизвестна | 16.0.00.66 | В 1.1.3 beta 1 профиль сверён с APK. Превью и сохранение в Галерею ждут проверки на устройстве. |
+| Samsung Galaxy с One UI 8.0, точная модель неизвестна | 16.0.00.66 | В 1.1.3 beta 2 переделано кадрирование превью. Превью и сохранение в Галерею ждут повторной проверки на устройстве. |
 | Galaxy S20–S24 Ultra, Galaxy S26 Ultra | Любая другая сборка | Требуется проверка профиля камеры и съёмки на устройстве. |
 | Другие Samsung Galaxy | Любая другая сборка | Требуется проверка профиля камеры и съёмки на устройстве. |
 

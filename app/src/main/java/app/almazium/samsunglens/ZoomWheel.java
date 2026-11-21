@@ -23,11 +23,14 @@ final class ZoomWheel {
     boolean positioning;
     private long lastHaptic;
 
-    ZoomWheel(HorizontalScrollView scroll, View ticks, SparseIntArray positions) {
+    private final boolean camera16;
+
+    ZoomWheel(HorizontalScrollView scroll, View ticks, SparseIntArray positions, boolean camera16) {
+        this.camera16 = camera16;
         this.scroll = scroll;
         this.ticks = ticks;
         nativePositions = positions;
-        track = (ViewGroup) getObjectField(getObjectField(ticks, "g"), "a");
+        track = (ViewGroup) getObjectField(getObjectField(ticks, (camera16 ? "mViewBinding" : "g")), "a");
     }
 
     boolean install() {
@@ -35,15 +38,18 @@ final class ZoomWheel {
         if (!extension.isEmpty() && !attached()) extension.clear();
         if (!extension.isEmpty() && extension.size() != extraTicks) remove();
         if (!extension.isEmpty() || extraTicks == 0 || track.getChildCount() == 0) return false;
-        int minor = getIntField(ticks, "d");
-        int major = getIntField(ticks, "e");
+        int minor = getIntField(ticks, (camera16 ? "mNormalBarResource" : "d"));
+        int major = getIntField(ticks, (camera16 ? "mShortcutBarResource" : "e"));
         int spacing = Math.round(4 * scroll.getResources().getDisplayMetrics().density);
         try {
             for (int i = 1; i <= extraTicks; i++) {
                 boolean marker = i % 8 == 0;
-                View tick = (View) callMethod(ticks, "a", marker ? major : minor, spacing);
+                View tick = (View) callMethod(ticks, (camera16 ? "addBarImageView" : "a"), marker ? major : minor, spacing);
                 extension.add(tick);
-                if (marker) callMethod(tick, "b");
+                if (marker) {
+                    if (camera16) callMethod(tick, "setType", 2);
+                    else callMethod(tick, "b");
+                }
             }
             invalidateHaptics();
             return true;
@@ -129,7 +135,7 @@ final class ZoomWheel {
     }
 
     private void invalidateHaptics() {
-        Object pairs = getObjectField(ticks, "b");
+        Object pairs = getObjectField(ticks, (camera16 ? "mBarRangeArray" : "b"));
         if (pairs instanceof Collection<?> collection) collection.clear();
     }
 }
